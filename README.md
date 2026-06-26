@@ -208,24 +208,8 @@ Safety is enforced at both input and output stages. If any output rail trips, th
 
 | Assumption | Value | Note |
 |---|---|---|
-| High-value threshold | 10,000 BDT | Tunable. Triggers `human_review_required`. Based on typical digital wallet ranges and needs real-world calibration. |
 | Duplicate detection window | 5 minutes | Two payments with the same amount and counterparty within this window → `duplicate_payment` |
 | Minimum amount for matching | 10 BDT | Amounts below this are treated as noise |
-| Phone number format | `01X-XXXXXXXX` | 11-digit Bangladeshi mobile numbers starting with `01` |
-
----
-
-## Known Limitations
-
-1. **Bangla templates:** Only the `wrong_transfer` Bangla reply is verified. The other seven are best-effort translations and are marked `[HUMAN_REVIEW_REQUIRED]` in the source. A native Bangla speaker must review these before production.
-
-2. **Keyword classifier:** The fallback is intentionally simple. It can mis-classify edge cases that the LLM handles well, particularly Bangla-only complaints with no obvious keywords.
-
-3. **Approximate amounts:** Transaction matching uses exact amounts. Complaints like "around 5000" or "roughly 2k" may not match correctly.
-
-4. **Semantic duplicates:** Duplicate detection only works on same amount + same counterparty + close timestamps. It does not catch cases like "I paid twice" when the transaction metadata does not match this pattern.
-
-5. **No persistent state:** Each request is fully independent. No cross-request correlation, no ticket history.
 
 ---
 
