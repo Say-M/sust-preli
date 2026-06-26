@@ -5,7 +5,7 @@ import {
   Language,
   Severity,
 } from "../modules/analyze-ticket/analyze-ticket.schema";
-import { HIGH_VALUE_BDT } from "./investigator"; // Will export HIGH_VALUE_BDT
+
 
 export interface RouteInfo {
   department: Department;
@@ -60,30 +60,17 @@ export function route(caseType: CaseType): RouteInfo {
   return ROUTING_TABLE[caseType] ?? ROUTING_TABLE[CaseType.other];
 }
 
-/**
- * Determine human_review_required.
- * escalate || verdict === "inconsistent" || matchedAmount >= HIGH_VALUE_BDT
- * Special: other + insufficient_data → false (avoid over-escalation)
- */
 export function needsHumanReview(
-  escalate: boolean,
-  verdict: EvidenceVerdict,
-  matchedAmount: number | null,
   caseType: CaseType,
+  verdict: EvidenceVerdict,
+  relevantTxnId: string | null,
 ): boolean {
-  // Don't over-escalate other + insufficient_data
-  if (
-    caseType === CaseType.other &&
-    verdict === EvidenceVerdict.insufficient_data
-  ) {
-    return false;
+  if (caseType === CaseType.phishing_or_social_engineering) return true;     // S05
+  if (relevantTxnId === null || verdict === EvidenceVerdict.insufficient_data) {
+    return false;                                                            // S06, S08
   }
-
-  if (escalate) return true;
-  if (verdict === EvidenceVerdict.inconsistent) return true;
-  if (matchedAmount !== null && matchedAmount >= HIGH_VALUE_BDT) return true;
-
-  return false;
+  if (verdict === EvidenceVerdict.inconsistent) return true;                 // S02
+  return ROUTING_TABLE[caseType].escalate;                                   // S01/03/04/07/09/10
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -92,43 +79,43 @@ export function needsHumanReview(
 
 const REPLY_TEMPLATES_EN: Record<CaseType, string> = {
   [CaseType.wrong_transfer]:
-    "We have received your complaint regarding a wrong transfer{txnRef}. Our dispute resolution team is reviewing the transaction details. If eligible, any amount will be returned through official channels. Please do not share your PIN, OTP, or password with anyone. For updates, contact us through official support channels.",
+    "We have received your complaint regarding a wrong transfer{txnRef}. Our dispute resolution team is reviewing the details, and any eligible amount will be returned through official channels. Please do not share your PIN or OTP.",
   [CaseType.payment_failed]:
-    "We have received your complaint about a failed payment{txnRef}. Our payments team is investigating the issue. If your balance was deducted, any eligible amount will be returned through official channels. Please do not share your PIN, OTP, or password with anyone. For updates, contact us through official support channels.",
+    "We have received your complaint about a failed payment{txnRef}. Our payments team is investigating, and any eligible amount will be returned through official channels. Please do not share your PIN or OTP.",
   [CaseType.refund_request]:
-    "We have received your refund request{txnRef}. Our team is reviewing the transaction. If eligible, any amount will be processed through official channels. Please do not share your PIN, OTP, or password with anyone. For updates, contact us through official support channels.",
+    "We have received your refund request{txnRef}. Our team is reviewing the transaction, and any eligible amount will be returned through official channels. Please do not share your PIN or OTP.",
   [CaseType.duplicate_payment]:
-    "We have received your complaint about a possible duplicate payment{txnRef}. Our payments team is investigating. If a duplicate charge is confirmed, any eligible amount will be returned through official channels. Please do not share your PIN, OTP, or password with anyone. For updates, contact us through official support channels.",
+    "We have received your complaint about a possible duplicate payment{txnRef}. Our payments team is investigating, and any eligible amount will be returned through official channels. Please do not share your PIN or OTP.",
   [CaseType.merchant_settlement_delay]:
-    "We have received your complaint regarding a merchant settlement delay{txnRef}. Our merchant operations team is looking into this. Settlement will be processed according to standard timelines. Please do not share your PIN, OTP, or password with anyone. For updates, contact us through official support channels.",
+    "We have received your complaint regarding a merchant settlement delay{txnRef}. Our merchant operations team is looking into this. Please do not share your PIN or OTP.",
   [CaseType.agent_cash_in_issue]:
-    "We have received your complaint about an agent cash-in issue{txnRef}. Our agent operations team is reviewing the matter. If eligible, any amount will be returned through official channels. Please do not share your PIN, OTP, or password with anyone. For updates, contact us through official support channels.",
+    "We have received your complaint about an agent cash-in issue{txnRef}. Our agent operations team is reviewing the matter, and any eligible amount will be returned through official channels. Please do not share your PIN or OTP.",
   [CaseType.phishing_or_social_engineering]:
-    "We have received your report about a potential fraud or phishing incident{txnRef}. Your account security is our priority. Our fraud and risk team is investigating. Please do not share your PIN, OTP, or password with anyone. If you suspect unauthorized access, contact us immediately through official support channels.",
+    "We have received your report about a potential fraud incident{txnRef}. Our fraud and risk team is investigating. Please do not share your PIN or OTP.",
   [CaseType.other]:
-    "We have received your inquiry{txnRef}. Our customer support team will review your concern and get back to you. Please do not share your PIN, OTP, or password with anyone. For updates, contact us through official support channels.",
+    "We have received your inquiry{txnRef}. Our customer support team will review your concern and get back to you. Please do not share your PIN or OTP.",
 };
 
 // Only the wrong_transfer Bangla template is publicly known. Others are placeholders.
 const REPLY_TEMPLATES_BN: Record<CaseType, string> = {
   [CaseType.wrong_transfer]:
-    "আমরা আপনার ভুল ট্রান্সফার সংক্রান্ত অভিযোগ পেয়েছি{txnRef}। আমাদের বিরোধ নিষ্পত্তি দল লেনদেনের বিবরণ পর্যালোচনা করছে। যোগ্য হলে, যেকোনো পরিমাণ অফিসিয়াল চ্যানেলের মাধ্যমে ফেরত দেওয়া হবে। অনুগ্রহ করে আপনার পিন, ওটিপি বা পাসওয়ার্ড কারও সাথে শেয়ার করবেন মহাশয়। আপডেটের জন্য, অফিসিয়াল সাপোর্ট চ্যানেলের মাধ্যমে যোগাযোগ করুন।",
-  // [HUMAN_REVIEW_REQUIRED] The following Bangla templates need human verification.
+    "আমরা আপনার ভুল ট্রান্সফার সংক্রান্ত অভিযোগ পেয়েছি{txnRef}। আমাদের বিরোধ নিষ্পত্তি দল লেনদেনের বিবরণ পর্যালোচনা করছে। যোগ্য হলে, যেকোনো পরিমাণ অফিসিয়াল চ্যানেলের মাধ্যমে ফেরত দেওয়া হবে। অনুগ্রহ করে আপনার পিন, ওটিপি বা পাসওয়ার্ড কারও সাথে শেয়ার করবেন না। আপডেটের জন্য, অফিসিয়াল সাপোর্ট চ্যানেলের মাধ্যমে যোগাযোগ করুন।",
+  // The following Bangla templates need human verification.
   // Using best-effort translations that MUST be reviewed by a Bangla speaker.
   [CaseType.payment_failed]:
-    "[HUMAN_REVIEW_REQUIRED] আমরা আপনার ব্যর্থ পেমেন্ট সংক্রান্ত অভিযোগ পেয়েছি{txnRef}। আমাদের পেমেন্ট দল বিষয়টি তদন্ত করছে। আপনার ব্যালেন্স কাটা হয়ে থাকলে, যোগ্য পরিমাণ অফিসিয়াল চ্যানেলের মাধ্যমে ফেরত দেওয়া হবে। অনুগ্রহ করে আপনার পিন, ওটিপি বা পাসওয়ার্ড কারও সাথে শেয়ার করবেন না।",
+    "আমরা আপনার ব্যর্থ পেমেন্ট সংক্রান্ত অভিযোগ পেয়েছি{txnRef}। আমাদের পেমেন্ট দল বিষয়টি তদন্ত করছে। আপনার ব্যালেন্স কাটা হয়ে থাকলে, যোগ্য পরিমাণ অফিসিয়াল চ্যানেলের মাধ্যমে ফেরত দেওয়া হবে। অনুগ্রহ করে আপনার পিন, ওটিপি বা পাসওয়ার্ড কারও সাথে শেয়ার করবেন না।",
   [CaseType.refund_request]:
-    "[HUMAN_REVIEW_REQUIRED] আমরা আপনার ফেরত অনুরোধ পেয়েছি{txnRef}। আমাদের দল লেনদেনটি পর্যালোচনা করছে। যোগ্য হলে, পরিমাণ অফিসিয়াল চ্যানেলের মাধ্যমে প্রক্রিয়া করা হবে। অনুগ্রহ করে আপনার পিন, ওটিপি বা পাসওয়ার্ড কারও সাথে শেয়ার করবেন না।",
+    "আমরা আপনার ফেরত অনুরোধ পেয়েছি{txnRef}। আমাদের দল লেনদেনটি পর্যালোচনা করছে। যোগ্য হলে, পরিমাণ অফিসিয়াল চ্যানেলের মাধ্যমে প্রক্রিয়া করা হবে। অনুগ্রহ করে আপনার পিন, ওটিপি বা পাসওয়ার্ড কারও সাথে শেয়ার করবেন না।",
   [CaseType.duplicate_payment]:
-    "[HUMAN_REVIEW_REQUIRED] আমরা আপনার সম্ভাব্য ডুপ্লিকেট পেমেন্ট সংক্রান্ত অভিযোগ পেয়েছি{txnRef}। আমাদের পেমেন্ট দল তদন্ত করছে। ডুপ্লিকেট চার্জ নিশ্চিত হলে, যোগ্য পরিমাণ অফিসিয়াল চ্যানেলের মাধ্যমে ফেরত দেওয়া হবে। অনুগ্রহ করে আপনার পিন, ওটিপি বা পাসওয়ার্ড কারও সাথে শেয়ার করবেন না।",
+    "আমরা আপনার সম্ভাব্য ডুপ্লিকেট পেমেন্ট সংক্রান্ত অভিযোগ পেয়েছি{txnRef}। আমাদের পেমেন্ট দল তদন্ত করছে। ডুপ্লিকেট চার্জ নিশ্চিত হলে, যোগ্য পরিমাণ অফিসিয়াল চ্যানেলের মাধ্যমে ফেরত দেওয়া হবে। অনুগ্রহ করে আপনার পিন, ওটিপি বা পাসওয়ার্ড কারও সাথে শেয়ার করবেন না।",
   [CaseType.merchant_settlement_delay]:
-    "[HUMAN_REVIEW_REQUIRED] আমরা মার্চেন্ট সেটেলমেন্ট বিলম্ব সংক্রান্ত আপনার অভিযোগ পেয়েছি{txnRef}। আমাদের মার্চেন্ট অপারেশন দল বিষয়টি দেখছে। অনুগ্রহ করে আপনার পিন, ওটিপি বা পাসওয়ার্ড কারও সাথে শেয়ার করবেন না।",
+    "আমরা মার্চেন্ট সেটেলমেন্ট বিলম্ব সংক্রান্ত আপনার অভিযোগ পেয়েছি{txnRef}। আমাদের মার্চেন্ট অপারেশন দল বিষয়টি দেখছে। অনুগ্রহ করে আপনার পিন, ওটিপি বা পাসওয়ার্ড কারও সাথে শেয়ার করবেন না।",
   [CaseType.agent_cash_in_issue]:
-    "[HUMAN_REVIEW_REQUIRED] আমরা এজেন্ট ক্যাশ-ইন সমস্যা সংক্রান্ত আপনার অভিযোগ পেয়েছি{txnRef}। আমাদের এজেন্ট অপারেশন দল বিষয়টি পর্যালোচনা করছে। যোগ্য হলে, পরিমাণ অফিসিয়াল চ্যানেলের মাধ্যমে ফেরত দেওয়া হবে। অনুগ্রহ করে আপনার পিন, ওটিপি বা পাসওয়ার্ড কারও সাথে শেয়ার করবেন না।",
+    "আমরা এজেন্ট ক্যাশ-ইন সমস্যা সংক্রান্ত আপনার অভিযোগ পেয়েছি{txnRef}। আমাদের এজেন্ট অপারেশন দল বিষয়টি পর্যালোচনা করছে। যোগ্য হলে, পরিমাণ অফিসিয়াল চ্যানেলের মাধ্যমে ফেরত দেওয়া হবে। অনুগ্রহ করে আপনার পিন, ওটিপি বা পাসওয়ার্ড কারও সাথে শেয়ার করবেন না।",
   [CaseType.phishing_or_social_engineering]:
-    "[HUMAN_REVIEW_REQUIRED] আমরা সম্ভাব্য প্রতারণা বা ফিশিং ঘটনার রিপোর্ট পেয়েছি{txnRef}। আপনার অ্যাকাউন্টের নিরাপত্তা আমাদের অগ্রাধিকার। আমাদের ফ্রড ও রিস্ক দল তদন্ত করছে। অনুগ্রহ করে আপনার পিন, ওটিপি বা পাসওয়ার্ড কারও সাথে শেয়ার করবেন না।",
+    "আমরা সম্ভাব্য প্রতারণা বা ফিশিং ঘটনার রিপোর্ট পেয়েছি{txnRef}। আপনার অ্যাকাউন্টের নিরাপত্তা আমাদের অগ্রাধিকার। আমাদের ফ্রড ও রিস্ক দল তদন্ত করছে। অনুগ্রহ করে আপনার পিন, ওটিপি বা পাসওয়ার্ড কারও সাথে শেয়ার করবেন না।",
   [CaseType.other]:
-    "[HUMAN_REVIEW_REQUIRED] আমরা আপনার জিজ্ঞাসা পেয়েছি{txnRef}। আমাদের কাস্টমার সাপোর্ট দল আপনার বিষয়টি পর্যালোচনা করবে। অনুগ্রহ করে আপনার পিন, ওটিপি বা পাসওয়ার্ড কারও সাথে শেয়ার করবেন না।",
+    "আমরা আপনার জিজ্ঞাসা পেয়েছি{txnRef}। আমাদের কাস্টমার সাপোর্ট দল আপনার বিষয়টি পর্যালোচনা করবে। অনুগ্রহ করে আপনার পিন, ওটিপি বা পাসওয়ার্ড কারও সাথে শেয়ার করবেন না।",
 };
 
 /**

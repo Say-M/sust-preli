@@ -9,6 +9,7 @@ import {
   Severity,
   type AnalyzeTicketInput,
   type AnalyzeTicketOutput,
+  type Transaction,
 } from "../modules/analyze-ticket/analyze-ticket.schema";
 import { keywordClassify } from "./classifier";
 import { applyOutputRails } from "./rails";
@@ -25,8 +26,6 @@ import { matchTransaction } from "../utils/transaction.util";
 // Constants & Config
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Tunable threshold — amounts >= this trigger human_review_required. GUESS. */
-export const HIGH_VALUE_BDT = 10_000;
 
 /** Model name for the OpenAI structured-output call. */
 const MODEL_NAME = process.env.OPENAI_MODEL || "gpt-4o-mini";
@@ -134,13 +133,8 @@ export async function analyzeTicket(
   input: AnalyzeTicketInput,
 ): Promise<AnalyzeTicketOutput> {
   try {
-    const reasonCodes: string[] = [];
-
     // 1. Input rails
     const isInjection = detectInjection(input.complaint);
-    if (isInjection) {
-      reasonCodes.push("possible_injection");
-    }
 
     const language = detectLanguage(input.complaint, input.language);
 
@@ -152,11 +146,9 @@ export async function analyzeTicket(
     if (llmResult) {
       caseType = llmResult.case_type;
       agentSummary = llmResult.agent_summary;
-      reasonCodes.push("llm_classified");
     } else {
       caseType = keywordClassify(input.complaint);
       agentSummary = `Support ticket classified as ${caseType.replace(/_/g, " ")} based on keyword analysis. Requires agent review.`;
-      reasonCodes.push("keyword_classified");
     }
 
     // 3. Match transaction deterministically
@@ -169,21 +161,35 @@ export async function analyzeTicket(
     // Apply case_type override from duplicate detection
     if (matchResult.caseTypeOverride) {
       caseType = matchResult.caseTypeOverride;
-      reasonCodes.push("duplicate_detected");
     }
 
     const relevantTxnId = matchResult.txn?.transaction_id ?? null;
-    const matchedAmount = matchResult.txn?.amount ?? null;
     const verdict = matchResult.verdict;
 
     // 4. Route
     const routeInfo = route(caseType);
     const humanReview = needsHumanReview(
-      routeInfo.escalate,
-      verdict,
-      matchedAmount,
       caseType,
+      verdict,
+      relevantTxnId,
     );
+
+    let severity = routeInfo.baseSeverity;
+    if (caseType === CaseType.wrong_transfer && verdict !== EvidenceVerdict.consistent) {
+      severity = Severity.medium;
+    }
+
+    // Build reasonCodes
+    const reasonCodes: string[] = [caseType, `evidence_${verdict}`];
+    if (matchResult.txn) reasonCodes.push("transaction_match", matchResult.txn.status);
+    else reasonCodes.push("no_transaction_match");
+
+    if (isInjection) {
+      reasonCodes.push("possible_injection");
+    }
+    if (matchResult.caseTypeOverride) {
+      reasonCodes.push("duplicate_detected");
+    }
 
     // 5. Build templated customer_reply
     const customerReply = buildReply(caseType, language, relevantTxnId);
@@ -200,7 +206,7 @@ export async function analyzeTicket(
       relevant_transaction_id: relevantTxnId,
       evidence_verdict: verdict,
       case_type: caseType,
-      severity: routeInfo.baseSeverity,
+      severity: severity,
       department: routeInfo.department,
       agent_summary: agentSummary,
       recommended_next_action: nextAction,

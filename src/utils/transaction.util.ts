@@ -3,6 +3,7 @@ import {
   EvidenceVerdict,
   Transaction,
   TransactionStatus,
+  TransactionType,
 } from "../modules/analyze-ticket/analyze-ticket.schema";
 import { extractAmounts, extractPhoneNumbers } from "./text.util";
 
@@ -35,7 +36,7 @@ export function matchTransaction(
   }
 
   // Check for duplicate payment pattern FIRST
-  const duplicateResult = checkDuplicatePayment(history);
+  const duplicateResult = checkDuplicatePayment(history, caseType);
   if (duplicateResult) {
     return duplicateResult;
   }
@@ -75,12 +76,10 @@ export function matchTransaction(
     const txn = candidates[0]!;
     // Contradiction rule: wrong_transfer + named recipient has ≥3 prior transfers
     if (caseType === CaseType.wrong_transfer) {
-      const priorToSame = history.filter(
-        (t) =>
-          t.counterparty === txn.counterparty &&
-          t.transaction_id !== txn.transaction_id,
+      const sameRecipientTransfers = history.filter(
+        (t) => t.counterparty === txn.counterparty && t.type === TransactionType.transfer,
       );
-      if (priorToSame.length >= 3) {
+      if (sameRecipientTransfers.length >= 3) {
         return { txn, verdict: EvidenceVerdict.inconsistent };
       }
     }
@@ -98,11 +97,16 @@ export function matchTransaction(
  * ≥2 completed payments, same amount + counterparty, close in time.
  * Returns the LATER transaction as relevant_id, verdict: consistent.
  */
-function checkDuplicatePayment(history: Transaction[]): MatchResult | null {
+function checkDuplicatePayment(history: Transaction[], caseType: CaseType): MatchResult | null {
+  const NEVER_OVERRIDE = new Set<CaseType>([
+    CaseType.phishing_or_social_engineering,
+    CaseType.agent_cash_in_issue,
+    CaseType.merchant_settlement_delay,
+  ]);
+  if (NEVER_OVERRIDE.has(caseType)) return null;
+
   const completed = history.filter(
-    (t) =>
-      t.status === TransactionStatus.completed &&
-      (t.type === "payment" || t.type === "transfer"),
+    (t) => t.status === TransactionStatus.completed && t.type === "payment",
   );
 
   // Group by amount + counterparty

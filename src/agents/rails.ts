@@ -12,6 +12,9 @@ const CREDENTIAL_REQUEST_PATTERNS = [
   /\b(pin|otp|password|card\s*number|cvv)\b.{0,30}(?<!\bnot\s)(?<!\bnever\s)\b(share|send|provide|enter|give|tell)\b/i,
 ];
 
+const BN_CREDENTIAL_NOUNS = /(পিন|ওটিপি|পাসওয়ার্ড)/;
+const BN_NEGATION = /না/;
+
 /** Patterns that make unauthorized action promises. */
 const UNAUTHORIZED_ACTION_PATTERNS = [
   /\b(we will|we have|we've|you will be|your account will be|has been)\s+(refund|reverse|unblock|credit|debit)/i,
@@ -48,6 +51,10 @@ function scanField(
     if (pattern.test(value)) {
       return { field: fieldName, reason: "credential_request_detected" };
     }
+  }
+
+  if (BN_CREDENTIAL_NOUNS.test(value) && !BN_NEGATION.test(value)) {
+    return { field: fieldName, reason: "credential_request_detected_bn" };
   }
 
   // 2. Unauthorized-action scan
@@ -115,7 +122,7 @@ export function applyOutputRails(
     trippedReasons.push(replyScan.reason);
     response.customer_reply = buildReply(
       response.case_type,
-      language,
+      Language.en,
       response.relevant_transaction_id,
     );
   }
