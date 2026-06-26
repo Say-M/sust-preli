@@ -5,6 +5,7 @@ import {
   analyzeTicketOutputSchema,
 } from "./analyze-ticket.schema";
 import { errorResponseSchema } from "../../common/schema";
+import { HTTPException } from "hono/http-exception";
 
 const app = new Hono();
 
@@ -40,9 +41,22 @@ app.post(
       },
     },
   }),
-  // validator("json", analyzeTicketInputSchema),
+  validator("json", analyzeTicketInputSchema, (result) => {
+    if (!result.success) {
+      if (!result.success) {
+        let message = "";
+        result.error.forEach((error) => {
+          message += error.message + "\n";
+        });
+        message = message.trim();
+        if (!message) message = "Something went wrong";
+
+        throw new HTTPException(422, { message });
+      }
+    }
+  }),
   async (c) => {
-    // const input = c.req.valid("json");
+    const input = c.req.valid("json");
     return c.json({ message: "Ticket analyzed successfully" });
   },
 );

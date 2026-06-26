@@ -80,10 +80,10 @@ export enum Department {
 export const transactionSchema = z.object({
   transaction_id: z.string(),
   timestamp: z.iso.datetime(),
-  type: TransactionType,
+  type: z.enum(TransactionType),
   amount: z.number().positive(),
   counterparty: z.string(),
-  status: TransactionStatus,
+  status: z.enum(TransactionStatus),
 });
 
 export const analyzeTicketInputSchema = z.object({

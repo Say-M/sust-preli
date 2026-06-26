@@ -8,6 +8,7 @@ import { openAPIRouteHandler } from "hono-openapi";
 import { Scalar } from "@scalar/hono-api-reference";
 import healthRoute from "./modules/health/health.route";
 import analyzeTicketRoute from "./modules/analyze-ticket/analyze-ticket.route";
+import { ZodError } from "zod";
 
 const app = new Hono();
 
@@ -19,9 +20,14 @@ app.onError((error, c) => {
   let status: ContentfulStatusCode = 500;
   let message = "Internal server error";
   const timestamp = new Date().toISOString();
+  console.log({ error });
+
   if (error instanceof HTTPException) {
     status = error.status;
     message = error.message;
+  } else if (error instanceof ZodError) {
+    message = error.message;
+    status = 400;
   } else {
     message = error?.message || "Internal server error";
     status = 500;
