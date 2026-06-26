@@ -1,0 +1,14 @@
+{
+  "name": "sust-2026-preli",
+  "scripts": {
+    "dev": "bun run --hot src/index.ts"
+  },
+  "dependencies": {
+    "@openai/agents": "^0.12.0",
+    "hono": "^4.12.27",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}
