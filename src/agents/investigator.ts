@@ -134,6 +134,32 @@ export async function analyzeTicket(
   input: AnalyzeTicketInput,
 ): Promise<AnalyzeTicketOutput> {
   try {
+    const openai = new OpenAI();
+    const moderationResponse = await openai.moderations.create({
+      input: input.complaint,
+    });
+    
+    if (moderationResponse.results[0]?.flagged) {
+      return {
+        ticket_id: input.ticket_id,
+        relevant_transaction_id: null,
+        evidence_verdict: EvidenceVerdict.insufficient_data,
+        case_type: CaseType.other,
+        severity: Severity.high,
+        department: Department.fraud_risk,
+        agent_summary: "The customer's message was flagged by automated moderation guardrails for inappropriate or abusive content.",
+        recommended_next_action: "Review the user's account for policy violations and determine if a warning or suspension is necessary. Do not engage with the abusive content.",
+        customer_reply: "We have received your message. Please ensure all communications follow our community guidelines. Your ticket has been forwarded for review. Please do not share your PIN or OTP with anyone.",
+        human_review_required: true,
+        confidence: 0.99,
+        reason_codes: ["policy_violation_moderation", "other"],
+      };
+    }
+  } catch (e) {
+    console.error("Moderation API failed, falling back to standard flow:", e);
+  }
+
+  try {
     const isInjection = detectInjection(input.complaint);
 
     const language = detectLanguage(input.complaint, input.language);
