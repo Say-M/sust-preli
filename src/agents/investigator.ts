@@ -8,9 +8,9 @@ import {
   type AnalyzeTicketInput,
   type AnalyzeTicketOutput,
 } from "../modules/analyze-ticket/analyze-ticket.schema";
-import { keywordClassify } from "../utils/classifier.util";
-import { applyOutputRails } from "../utils/rails.util";
-import { buildNextAction, buildReply, needsHumanReview, route } from "../utils/routing.util";
+import { keywordClassify } from "./classifier";
+import { applyOutputRails } from "./rails";
+import { buildNextAction, buildReply, needsHumanReview, route } from "./routing";
 import { detectInjection, detectLanguage } from "../utils/text.util";
 import { matchTransaction } from "../utils/transaction.util";
 

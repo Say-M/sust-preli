@@ -5,7 +5,7 @@ import {
   Language,
   Severity,
 } from "../modules/analyze-ticket/analyze-ticket.schema";
-import { HIGH_VALUE_BDT } from "../agents/investigator"; // Will export HIGH_VALUE_BDT
+import { HIGH_VALUE_BDT } from "./investigator"; // Will export HIGH_VALUE_BDT
 
 export interface RouteInfo {
   department: Department;
