@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { describeRoute, resolver } from "hono-openapi";
 import { healthResponseSchema } from "./health.schema";
 import { errorResponseSchema } from "../../common/schema";
+import { checkHealth } from "./health.service";
 
 const app = new Hono();
 
@@ -12,9 +13,17 @@ app.get(
     summary: "Check health of the server",
     responses: {
       200: {
-        description: "OK",
+        description: "OK — OPENAI_API_KEY is configured",
         content: {
           "application/json": { schema: resolver(healthResponseSchema) },
+        },
+      },
+      503: {
+        description: "Service unavailable — OPENAI_API_KEY is missing",
+        content: {
+          "application/json": {
+            schema: resolver(errorResponseSchema),
+          },
         },
       },
       500: {
@@ -28,7 +37,8 @@ app.get(
     },
   }),
   (c) => {
-    return c.json({ status: "ok" });
+    const health = checkHealth();
+    return c.json(health);
   },
 );
 
