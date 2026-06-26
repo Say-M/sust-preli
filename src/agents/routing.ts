@@ -65,12 +65,12 @@ export function needsHumanReview(
   verdict: EvidenceVerdict,
   relevantTxnId: string | null,
 ): boolean {
-  if (caseType === CaseType.phishing_or_social_engineering) return true;     // S05
+  if (caseType === CaseType.phishing_or_social_engineering) return true;
   if (relevantTxnId === null || verdict === EvidenceVerdict.insufficient_data) {
-    return false;                                                            // S06, S08
+    return false;
   }
-  if (verdict === EvidenceVerdict.inconsistent) return true;                 // S02
-  return ROUTING_TABLE[caseType].escalate;                                   // S01/03/04/07/09/10
+  if (verdict === EvidenceVerdict.inconsistent) return true;
+  return ROUTING_TABLE[caseType].escalate;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -100,8 +100,6 @@ const REPLY_TEMPLATES_EN: Record<CaseType, string> = {
 const REPLY_TEMPLATES_BN: Record<CaseType, string> = {
   [CaseType.wrong_transfer]:
     "আমরা আপনার ভুল ট্রান্সফার সংক্রান্ত অভিযোগ পেয়েছি{txnRef}। আমাদের বিরোধ নিষ্পত্তি দল লেনদেনের বিবরণ পর্যালোচনা করছে। যোগ্য হলে, যেকোনো পরিমাণ অফিসিয়াল চ্যানেলের মাধ্যমে ফেরত দেওয়া হবে। অনুগ্রহ করে আপনার পিন, ওটিপি বা পাসওয়ার্ড কারও সাথে শেয়ার করবেন না। আপডেটের জন্য, অফিসিয়াল সাপোর্ট চ্যানেলের মাধ্যমে যোগাযোগ করুন।",
-  // The following Bangla templates need human verification.
-  // Using best-effort translations that MUST be reviewed by a Bangla speaker.
   [CaseType.payment_failed]:
     "আমরা আপনার ব্যর্থ পেমেন্ট সংক্রান্ত অভিযোগ পেয়েছি{txnRef}। আমাদের পেমেন্ট দল বিষয়টি তদন্ত করছে। আপনার ব্যালেন্স কাটা হয়ে থাকলে, যোগ্য পরিমাণ অফিসিয়াল চ্যানেলের মাধ্যমে ফেরত দেওয়া হবে। অনুগ্রহ করে আপনার পিন, ওটিপি বা পাসওয়ার্ড কারও সাথে শেয়ার করবেন না।",
   [CaseType.refund_request]:
@@ -134,10 +132,6 @@ export function buildReply(
   const template = templates[caseType] ?? templates[CaseType.other];
   return template.replace("{txnRef}", txnRef);
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Rule-derived recommended_next_action
-// ─────────────────────────────────────────────────────────────────────────────
 
 const NEXT_ACTION_TEMPLATES: Record<CaseType, string> = {
   [CaseType.wrong_transfer]:
