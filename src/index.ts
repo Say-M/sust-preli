@@ -4,6 +4,8 @@ import { secureHeaders } from "hono/secure-headers";
 import { bodyLimit } from "hono/body-limit";
 import { ContentfulStatusCode } from "hono/utils/http-status";
 import { HTTPException } from "hono/http-exception";
+import healthRoute from "./modules/health/health.route";
+import analyzeTicketRoute from "./modules/analyze-ticket/analyze-ticket.route";
 
 const app = new Hono();
 
@@ -47,8 +49,7 @@ app.use(
   }),
 );
 
-app.get("/health", (c) => {
-  return c.text("Hello Hono!");
-});
+app.route("", healthRoute);
+app.route("", analyzeTicketRoute);
 
 export default app;
