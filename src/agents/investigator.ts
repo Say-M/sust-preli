@@ -1,4 +1,6 @@
 import OpenAI from "openai";
+import { zodResponseFormat } from "openai/helpers/zod";
+import { z } from "zod";
 import {
   CaseType,
   Department,
@@ -10,7 +12,12 @@ import {
 } from "../modules/analyze-ticket/analyze-ticket.schema";
 import { keywordClassify } from "./classifier";
 import { applyOutputRails } from "./rails";
-import { buildNextAction, buildReply, needsHumanReview, route } from "./routing";
+import {
+  buildNextAction,
+  buildReply,
+  needsHumanReview,
+  route,
+} from "./routing";
 import { detectInjection, detectLanguage } from "../utils/text.util";
 import { matchTransaction } from "../utils/transaction.util";
 
@@ -40,6 +47,11 @@ interface LLMResult {
   agent_summary: string;
 }
 
+const ticketClassificationSchema = z.object({
+  case_type: z.enum(CaseType).describe("The type of the ticket"),
+  agent_summary: z.string().describe("A summary of the ticket for the agent"),
+});
+
 /**
  * Call the LLM for case_type classification + agent_summary.
  * Uses structured outputs with strict: true to lock the enum.
@@ -61,10 +73,7 @@ export async function classify(
       if (input.language) contextParts.push(`Language hint: ${input.language}`);
       if (input.channel) contextParts.push(`Channel: ${input.channel}`);
       if (input.user_type) contextParts.push(`User type: ${input.user_type}`);
-      if (
-        input.transaction_history &&
-        input.transaction_history.length > 0
-      ) {
+      if (input.transaction_history && input.transaction_history.length > 0) {
         contextParts.push(
           `Transaction count: ${input.transaction_history.length}`,
         );
@@ -78,27 +87,10 @@ export async function classify(
             { role: "system", content: SYSTEM_PROMPT },
             { role: "user", content: contextParts.join("\n") },
           ],
-          response_format: {
-            type: "json_schema",
-            json_schema: {
-              name: "ticket_classification",
-              strict: true,
-              schema: {
-                type: "object",
-                properties: {
-                  case_type: {
-                    type: "string",
-                    enum: CASE_TYPE_VALUES,
-                  },
-                  agent_summary: {
-                    type: "string",
-                  },
-                },
-                required: ["case_type", "agent_summary"],
-                additionalProperties: false,
-              },
-            },
-          },
+          response_format: zodResponseFormat(
+            ticketClassificationSchema,
+            "ticket_classification",
+          ),
         },
         { signal: controller.signal },
       );
@@ -122,7 +114,10 @@ export async function classify(
   } catch (error) {
     // On ANY error — timeout, network, parse — return null.
     // Caller falls back to keyword classifier.
-    console.error("[investigator] LLM classify error (falling back):", (error as Error)?.message ?? "unknown");
+    console.error(
+      "[investigator] LLM classify error (falling back):",
+      (error as Error)?.message ?? "unknown",
+    );
     return null;
   }
 }
@@ -147,7 +142,7 @@ export async function analyzeTicket(
       reasonCodes.push("possible_injection");
     }
 
-    const language = detectLanguage(input.complaint, input.language as Language | undefined);
+    const language = detectLanguage(input.complaint, input.language);
 
     // 2. Classify — LLM (if enabled) or keyword fallback
     let caseType: CaseType;
@@ -197,8 +192,7 @@ export async function analyzeTicket(
     const nextAction = buildNextAction(caseType, verdict, relevantTxnId);
 
     // 7. Set confidence
-    const confidence =
-      verdict === EvidenceVerdict.consistent ? 0.9 : 0.65;
+    const confidence = verdict === EvidenceVerdict.consistent ? 0.9 : 0.65;
 
     // 8. Compose response
     let response: AnalyzeTicketOutput = {
@@ -229,7 +223,10 @@ export async function analyzeTicket(
     return response;
   } catch (error) {
     // Absolute last-resort fallback — never crash
-    console.error("[investigator] Unexpected error in analyzeTicket:", (error as Error)?.message ?? "unknown");
+    console.error(
+      "[investigator] Unexpected error in analyzeTicket:",
+      (error as Error)?.message ?? "unknown",
+    );
     return {
       ticket_id: input.ticket_id,
       relevant_transaction_id: null,
