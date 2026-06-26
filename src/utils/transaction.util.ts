@@ -86,9 +86,6 @@ export function matchTransaction(
     return { txn, verdict: EvidenceVerdict.consistent };
   }
 
-  // >1 candidate: try to disambiguate
-  // If all same counterparty and close in time, could be duplicate
-  // Otherwise, insufficient_data (never guess)
   return { txn: null, verdict: EvidenceVerdict.insufficient_data };
 }
 

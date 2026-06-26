@@ -7,7 +7,6 @@ import { buildNextAction, buildReply } from "./routing";
 
 /** Patterns that REQUEST credentials (not warnings about them). */
 const CREDENTIAL_REQUEST_PATTERNS = [
-  // Matches "share/send/provide your PIN" but NOT "do not share your PIN" or "never share"
   /(?<!\bnot\s)(?<!\bnever\s)(?<!\bdon't\s)(?<!\bdo\snot\s)\b(share|send|provide|enter|give|tell)\b.{0,30}\b(pin|otp|password|card\s*number|cvv|secret)\b/i,
   /\b(pin|otp|password|card\s*number|cvv)\b.{0,30}(?<!\bnot\s)(?<!\bnever\s)\b(share|send|provide|enter|give|tell)\b/i,
 ];
@@ -31,7 +30,7 @@ const THIRD_PARTY_PATTERNS = [
 /** Token / secret leak patterns. */
 const SECRET_PATTERNS = [
   /sk-[a-zA-Z0-9]{20,}/,
-  /\bat\s+line\s+\d+\b/i, // Stack trace
+  /\bat\s+line\s+\d+\b/i,
   /Error:\s+\w+Error/,
   /\.ts:\d+:\d+/,
 ];
@@ -46,7 +45,6 @@ function scanField(
   fieldName: "customer_reply" | "recommended_next_action",
   complaint: string,
 ): ScanResult | null {
-  // 1. Credential-request scan
   for (const pattern of CREDENTIAL_REQUEST_PATTERNS) {
     if (pattern.test(value)) {
       return { field: fieldName, reason: "credential_request_detected" };
@@ -57,29 +55,24 @@ function scanField(
     return { field: fieldName, reason: "credential_request_detected_bn" };
   }
 
-  // 2. Unauthorized-action scan
   for (const pattern of UNAUTHORIZED_ACTION_PATTERNS) {
     if (pattern.test(value)) {
       return { field: fieldName, reason: "unauthorized_action_detected" };
     }
   }
 
-  // 3. Third-party redirection scan
   for (const pattern of THIRD_PARTY_PATTERNS) {
     if (pattern.test(value)) {
       return { field: fieldName, reason: "third_party_redirection_detected" };
     }
   }
 
-  // 4. Secret/stack-trace/token leak scan
   for (const pattern of SECRET_PATTERNS) {
     if (pattern.test(value)) {
       return { field: fieldName, reason: "secret_leak_detected" };
     }
   }
 
-  // 5. Injection-echo scan — complaint instruction text in output
-  // Check if substantial complaint substrings appear in output
   if (complaint.length > 20) {
     const injectionPhrases = [
       "ignore previous",
@@ -142,11 +135,9 @@ export function applyOutputRails(
     );
   }
 
-  // Enum coercion + full re-validation
   const validation = analyzeTicketOutputSchema.safeParse(response);
   if (!validation.success) {
     trippedReasons.push("output_validation_failed");
-    // Fix known issues: ensure nonempty strings
     if (!response.agent_summary || response.agent_summary.trim() === "") {
       response.agent_summary =
         "Support ticket received. Routing to appropriate department for review.";

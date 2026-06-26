@@ -19,7 +19,6 @@ app.onError((error, c) => {
   let status: ContentfulStatusCode = 500;
   let message = "Internal server error";
   const timestamp = new Date().toISOString();
-  // Log internally but NEVER leak to response
   console.error("[global error handler]", error?.message ?? "unknown error");
 
   if (error instanceof HTTPException) {
@@ -31,7 +30,6 @@ app.onError((error, c) => {
     status = 500;
   }
 
-  // SAFE: only message + timestamp, no raw error object
   return c.json({ message, timestamp }, status);
 });
 

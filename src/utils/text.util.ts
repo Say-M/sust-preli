@@ -61,7 +61,6 @@ export function extractAmounts(text: string): number[] {
   const amounts: number[] = [];
 
   // Match numbers potentially followed by taka/টাকা, or preceded by taka/tk/BDT
-  // Also match standalone numbers that look like monetary amounts
   const patterns = [
     // "5000 taka", "৫০০০ টাকা", "5,000 taka"
     /(?:[\d,]+(?:\.\d{1,2})?)\s*(?:taka|টাকা|tk|bdt)/gi,
@@ -80,7 +79,6 @@ export function extractAmounts(text: string): number[] {
       const num = parseFloat(numStr);
       if (!isNaN(num) && num > 0 && !seen.has(num)) {
         // Filter out noise: phone numbers (11+ digits), times like "2pm",
-        // years, very small numbers
         const digitCount = numStr.replace(/\./g, "").length;
         if (digitCount <= 10 && num >= 10) {
           // Check if this number is followed by pm/am (time), or looks like a year

@@ -45,6 +45,7 @@ app.post(
       },
     },
   }),
+<<<<<<< Updated upstream
   validator("json", analyzeTicketInputSchema, (result, c) => {
     if (!result.success) {
       let message = "";
@@ -54,6 +55,92 @@ app.post(
       message = message.trim();
       if (!message) message = "Something went wrong";
 
+=======
+  async (c) => {
+    try {
+      let rawBody: unknown;
+      try {
+        rawBody = await c.req.json();
+      } catch {
+        return c.json(
+          {
+            message: "Invalid JSON in request body",
+            timestamp: new Date().toISOString(),
+          },
+          400,
+        );
+      }
+
+      if (!rawBody || typeof rawBody !== "object") {
+        return c.json(
+          {
+            message: "Request body must be a JSON object",
+            timestamp: new Date().toISOString(),
+          },
+          400,
+        );
+      }
+
+      const body = rawBody as Record<string, unknown>;
+
+      if ("complaint" in body && body.complaint === "") {
+        return c.json(
+          {
+            message: "Complaint must not be empty",
+            timestamp: new Date().toISOString(),
+          },
+          422,
+        );
+      }
+
+      // Validate top-level fields strictly, but safe-parse transaction_history
+      // entry-by-entry and DROP invalid entries rather than 400-ing the whole ticket.
+      let tolerantBody = { ...body };
+
+      if (Array.isArray(body.transaction_history)) {
+        const validTransactions: unknown[] = [];
+        for (const entry of body.transaction_history) {
+          const result = transactionSchema.safeParse(entry);
+          if (result.success) {
+            validTransactions.push(result.data);
+          }
+          // Invalid entries are silently dropped — the matcher treats
+          // empty/partial history as insufficient_data, so this degrades gracefully.
+        }
+        tolerantBody = { ...body, transaction_history: validTransactions };
+      }
+
+      const parseResult = analyzeTicketInputSchema.safeParse(tolerantBody);
+
+      if (!parseResult.success) {
+        const issues = parseResult.error;
+        let message = "Validation failed";
+
+        if (issues && Array.isArray(issues)) {
+          const msgs = issues
+            .map((issue: { message?: string }) => issue.message)
+            .filter(Boolean);
+          if (msgs.length > 0) {
+            message = msgs.join("; ");
+          }
+        }
+
+        return c.json(
+          {
+            message,
+            timestamp: new Date().toISOString(),
+          },
+          400,
+        );
+      }
+
+      const validatedInput: AnalyzeTicketInput = parseResult.data;
+
+      const result = await analyzeTicketService(validatedInput);
+      return c.json(result, 200);
+    } catch (error) {
+      console.error("[analyze-ticket.route] Unexpected error:", (error as Error)?.message ?? "unknown");
+>>>>>>> Stashed changes
       return c.json(
         {
           message,
