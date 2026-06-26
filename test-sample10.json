@@ -1,0 +1,25 @@
+{
+  "ticket_id": "SAMPLE-10",
+  "complaint": "I got charged twice for my 1500 taka payment to ShopMart.",
+  "language": "en",
+  "channel": "in_app_chat",
+  "user_type": "customer",
+  "transaction_history": [
+    {
+      "transaction_id": "TXN-101",
+      "timestamp": "2024-01-15T10:30:00Z",
+      "type": "payment",
+      "amount": 1500,
+      "counterparty": "ShopMart",
+      "status": "completed"
+    },
+    {
+      "transaction_id": "TXN-102",
+      "timestamp": "2024-01-15T10:31:00Z",
+      "type": "payment",
+      "amount": 1500,
+      "counterparty": "ShopMart",
+      "status": "completed"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "ticket_id": "SAMPLE-06",
+  "complaint": "My payment of 3000 taka didn't work yesterday.",
+  "language": "en",
+  "channel": "in_app_chat",
+  "user_type": "customer",
+  "transaction_history": [
+    {
+      "transaction_id": "TXN-060",
+      "timestamp": "2024-01-15T10:30:00Z",
+      "type": "payment",
+      "amount": 5000,
+      "counterparty": "ShopMart",
+      "status": "completed"
+    }
+  ]
+}

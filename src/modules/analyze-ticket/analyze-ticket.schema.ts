@@ -21,13 +21,6 @@ export enum UserType {
   unknown = "unknown",
 }
 
-export const userTypeSchema = z.enum([
-  "customer",
-  "merchant",
-  "agent",
-  "unknown",
-]);
-
 export enum TransactionType {
   transfer = "transfer",
   payment = "payment",

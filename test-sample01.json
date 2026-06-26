@@ -1,0 +1,25 @@
+{
+  "ticket_id": "SAMPLE-01",
+  "complaint": "I accidentally sent 5000 taka to a wrong number 01712345678. Please help me get it back.",
+  "language": "en",
+  "channel": "in_app_chat",
+  "user_type": "customer",
+  "transaction_history": [
+    {
+      "transaction_id": "TXN-001",
+      "timestamp": "2024-01-15T10:30:00Z",
+      "type": "transfer",
+      "amount": 5000,
+      "counterparty": "01712345678",
+      "status": "completed"
+    },
+    {
+      "transaction_id": "TXN-002",
+      "timestamp": "2024-01-14T09:00:00Z",
+      "type": "payment",
+      "amount": 200,
+      "counterparty": "ShopMart",
+      "status": "completed"
+    }
+  ]
+}
