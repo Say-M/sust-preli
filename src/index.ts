@@ -4,6 +4,8 @@ import { secureHeaders } from "hono/secure-headers";
 import { bodyLimit } from "hono/body-limit";
 import { ContentfulStatusCode } from "hono/utils/http-status";
 import { HTTPException } from "hono/http-exception";
+import { openAPIRouteHandler } from "hono-openapi";
+import { Scalar } from "@scalar/hono-api-reference";
 import healthRoute from "./modules/health/health.route";
 import analyzeTicketRoute from "./modules/analyze-ticket/analyze-ticket.route";
 
@@ -48,6 +50,22 @@ app.use(
     },
   }),
 );
+
+app.get(
+  "/openapi",
+  openAPIRouteHandler(app, {
+    documentation: {
+      info: {
+        title: "Backend API",
+        version: "1.0.0",
+        description: "Backend API",
+      },
+      servers: [{ url: process.env.SERVER_URL!, description: "Local Server" }],
+    },
+  }),
+);
+
+app.get("/docs", Scalar({ url: "/openapi", theme: "purple" }));
 
 app.route("", healthRoute);
 app.route("", analyzeTicketRoute);

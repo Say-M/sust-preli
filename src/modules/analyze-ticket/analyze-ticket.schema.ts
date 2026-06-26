@@ -98,18 +98,18 @@ export const analyzeTicketInputSchema = z.object({
 });
 
 export const analyzeTicketOutputSchema = z.object({
-  ticket_id: z.string(),
+  ticket_id: z.string().nonempty(),
   relevant_transaction_id: z.string().nullable(),
-  evidence_verdict: EvidenceVerdict,
-  case_type: CaseType,
-  severity: Severity,
-  department: Department,
-  agent_summary: z.string().min(1),
-  recommended_next_action: z.string().min(1),
-  customer_reply: z.string().min(1),
+  evidence_verdict: z.enum(EvidenceVerdict),
+  case_type: z.enum(CaseType),
+  severity: z.enum(Severity),
+  department: z.enum(Department),
+  agent_summary: z.string().nonempty(),
+  recommended_next_action: z.string().nonempty(),
+  customer_reply: z.string().nonempty(),
   human_review_required: z.boolean(),
-  confidence: z.number().min(0).max(1).optional(),
-  reason_codes: z.array(z.string()).optional(),
+  confidence: z.number().min(0).max(1).nullish(),
+  reason_codes: z.array(z.string()).nullish(),
 });
 
 export type Transaction = z.infer<typeof transactionSchema>;
