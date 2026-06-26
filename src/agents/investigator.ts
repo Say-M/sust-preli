@@ -5,11 +5,9 @@ import {
   CaseType,
   Department,
   EvidenceVerdict,
-  Language,
   Severity,
   type AnalyzeTicketInput,
   type AnalyzeTicketOutput,
-  type Transaction,
 } from "../modules/analyze-ticket/analyze-ticket.schema";
 import { keywordClassify } from "./classifier";
 import { applyOutputRails } from "./rails";
@@ -25,7 +23,6 @@ import { matchTransaction } from "../utils/transaction.util";
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants & Config
 // ─────────────────────────────────────────────────────────────────────────────
-
 
 /** Model name for the OpenAI structured-output call. */
 const MODEL_NAME = process.env.OPENAI_MODEL || "gpt-4o-mini";
@@ -168,20 +165,20 @@ export async function analyzeTicket(
 
     // 4. Route
     const routeInfo = route(caseType);
-    const humanReview = needsHumanReview(
-      caseType,
-      verdict,
-      relevantTxnId,
-    );
+    const humanReview = needsHumanReview(caseType, verdict, relevantTxnId);
 
     let severity = routeInfo.baseSeverity;
-    if (caseType === CaseType.wrong_transfer && verdict !== EvidenceVerdict.consistent) {
+    if (
+      caseType === CaseType.wrong_transfer &&
+      verdict !== EvidenceVerdict.consistent
+    ) {
       severity = Severity.medium;
     }
 
     // Build reasonCodes
     const reasonCodes: string[] = [caseType, `evidence_${verdict}`];
-    if (matchResult.txn) reasonCodes.push("transaction_match", matchResult.txn.status);
+    if (matchResult.txn)
+      reasonCodes.push("transaction_match", matchResult.txn.status);
     else reasonCodes.push("no_transaction_match");
 
     if (isInjection) {
