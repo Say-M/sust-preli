@@ -79,7 +79,7 @@ This service follows a **deterministic-first** design. Rules decide the outcome;
 
 ```mermaid
 flowchart TD
-    A([Receive Request at /analyze-ticket]) --> B{Moderation API\n(OpenAI)}
+    A([Receive Request at /analyze-ticket]) --> B{"Moderation API (OpenAI)"}
     
     %% Moderation Flow
     B -->|Flagged as Toxic/Abusive| C[Return Instant Rejection\nDepartment: fraud_risk\nVerdict: insufficient_data]
