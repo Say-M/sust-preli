@@ -79,39 +79,55 @@ This service follows a **deterministic-first** design. Rules decide the outcome;
 
 ```mermaid
 flowchart TD
-    A([POST /analyze-ticket]) --> B[Zod Input Validation]
-    B --> C{LLM enabled?}
-    C -- Yes --> D[OpenAI gpt-4o-mini\nStructured Output]
-    D -- Success --> E[case_type + agent_summary from LLM]
-    D -- Timeout / Error --> F[Keyword Classifier Fallback]
-    C -- No --> F
-    E --> G[Transaction Matching\nDeterministic]
-    F --> G
-    G --> H[Routing Table Lookup\nseverity + department]
-    H --> I[Build customer_reply\nfrom template]
-    I --> J[Output Rails Check\n6 guardrail scans]
-    J --> K([Return AnalyzeTicketOutput])
+    A([Receive Request at /analyze-ticket]) --> B{"Moderation API (OpenAI)"}
+    
+    %% Moderation Flow
+    B -->|Flagged as Toxic/Abusive| C[Return Instant Rejection\nDepartment: fraud_risk\nVerdict: insufficient_data]
+    B -->|Safe| D[Rule: detectInjection\nRule: detectLanguage]
+    
+    %% Main LLM Generation
+    D --> E[Main LLM: gpt-4o-mini\nPrompt: SYSTEM_PROMPT]
+    E -->|Generates| F{Parse LLM Output}
+    F -->|Success| G[Extract:\n- case_type\n- agent_summary\n- customer_reply\n- recommended_next_action]
+    F -->|Failure / Timeout| H[Rule: keywordClassify\nFallback to static templates]
+    
+    %% Deterministic Business Logic
+    G --> I
+    H --> I
+    I[Rule: matchTransaction\nComputes verdict & relevantTxnId] --> J[Rule: routing\nComputes Department, Severity,\nhuman_review_required]
+    
+    %% Output Safety Rails
+    J --> K{Rule: applyOutputRails\nScan generated text for forbidden patterns}
+    
+    K -->|"Trips Guardrails\n(e.g., PIN request, Refund promise)"| L[Replace text with safe\nstatic fallback templates]
+    K -->|Safe| M[Keep LLM generated text]
+    
+    %% Final Output
+    L --> N([Construct & Return\nAnalyzeTicketOutput JSON])
+    M --> N([Construct & Return\nAnalyzeTicketOutput JSON])
 ```
 
-### What the rules engine decides (no LLM)
+### What the rules engine decides (deterministic)
+- **Moderation**: Fast API check to instantly reject abuse
 - `relevant_transaction_id`: matched from complaint text against transaction history
 - `evidence_verdict`: `consistent` / `inconsistent` / `insufficient_data`
 - `severity` and `department`: routing table lookup by case type
 - `human_review_required`: triggered by escalation flags, inconsistent evidence, or high-value transactions
-- `customer_reply`: templated per case type and language (English + Bangla)
-- `recommended_next_action`: templated per case type
+- **Output Rails**: strictly enforces safe phrases for `customer_reply` and `recommended_next_action`, rewriting them if they violate rules
 
 ### What the LLM provides (one structured call)
-- `case_type`: locked to 8 allowed values via JSON schema `strict: true`
+- `case_type`: locked to 8 allowed values via JSON schema
 - `agent_summary`: one or two factual sentences for the support agent
+- `customer_reply`: tailored polite reply in the user's language, natively handling ambiguous matches
+- `recommended_next_action`: specific, contextual next steps for the agent
 
-The complaint is always passed as fenced user content, never in the system prompt. The LLM call has a 10s hard timeout.
+The complaint and full transaction history are passed to the LLM to provide maximum context while generating replies. The LLM call has a 10s hard timeout.
 
 ### LLM fallback
 
 On any error, timeout, or when `USE_LLM=false`:
 - `case_type` → keyword-based classifier
-- `agent_summary` → generic safe template
+- `agent_summary`, `customer_reply`, `recommended_next_action` → generic safe static templates
 
 The service never crashes or hangs because of the LLM layer. It always returns a valid 200 response.
 
@@ -166,10 +182,10 @@ Safety is enforced at both input and output stages. If any output rail trips, th
 | Injection-echo | Complaint instruction text appearing verbatim in output |
 | Schema re-validation | Full Zod check on the final response before sending |
 
-### Why no OpenAI Moderation API call
-- Customer replies are templated (safe by construction), not freely LLM-generated
-- A synchronous moderation call would add latency and a new failure mode
-- If needed later, a local zero-network word-list pass that only sets a `reason_code` is the recommended approach
+### OpenAI Moderation Guardrail
+- Every request is immediately scanned by the OpenAI Moderation API.
+- If flagged as toxic, abusive, or violating community guidelines, the ticket is short-circuited.
+- It returns a schema-compliant response routing to `fraud_risk` with a `policy_violation_moderation` reason code without ever engaging the main LLM.
 
 ---
 
