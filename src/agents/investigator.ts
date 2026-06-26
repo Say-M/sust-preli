@@ -37,8 +37,10 @@ Team Routing Mapping:
 - refund_request, other -> customer support team
 
 Write agent_summary: one or two factual sentences for a support agent, with no customer-facing promises.
-Write customer_reply: This is the message the support team will send back to the customer, in the language of their complaint. Acknowledge their issue (e.g., "We have noted your concern..."). DO NOT just echo their complaint back to them. If the issue requires investigation, assure them that the relevant team (use the Team Routing Mapping above) will review the case and update them through official channels. If clarification is needed, ask for it. It MUST end with a safety warning like "Please do not share your PIN or OTP with anyone." It MUST NOT promise a refund (use "any eligible amount will be returned through official channels").
-Write recommended_next_action for the support agent: an actionable instruction (e.g., "Verify ledger status", "Flag for human review").
+Write customer_reply: This is the message the support team will send back to the customer, in the language of their complaint. Acknowledge their issue (e.g., "We have noted your concern..."). DO NOT just echo their complaint back to them. 
+CRITICAL RULE for customer_reply: Look at the provided transaction history. If there are multiple transactions that could match the complaint (ambiguous match) or if no transaction matches, DO NOT say a team will review the case. Instead, ask the customer for clarification (e.g. asking for the exact amount, recipient number, or time) so you can identify the correct transaction. If exactly one transaction matches clearly, then you can assure them that the relevant team (use the Team Routing Mapping above) will review the case and update them through official channels.
+It MUST end with a safety warning like "Please do not share your PIN or OTP with anyone." It MUST NOT promise a refund (use "any eligible amount will be returned through official channels").
+Write recommended_next_action for the support agent: Provide a specific, 1-2 sentence actionable instruction. It MUST mention the specific transaction using the placeholder {txnRef} if a transaction is involved, and state the exact policy or workflow to follow (e.g., "Verify {txnRef} details with the customer and initiate the wrong-transfer dispute workflow per policy"). DO NOT just output generic phrases like "Flag for human review" without explaining exactly what the human should investigate.
 If a transaction ID is relevant in either reply or action, use the placeholder {txnRef}. Respond only with the required JSON.`;
 
 const CASE_TYPE_VALUES = Object.values(CaseType);
@@ -80,7 +82,7 @@ export async function classify(
       if (input.user_type) contextParts.push(`User type: ${input.user_type}`);
       if (input.transaction_history && input.transaction_history.length > 0) {
         contextParts.push(
-          `Transaction count: ${input.transaction_history.length}`,
+          `Transaction history:\n${JSON.stringify(input.transaction_history, null, 2)}`
         );
       }
 
