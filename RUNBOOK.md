@@ -1,4 +1,4 @@
-# Runbook — Bring Up the Service Locally
+# Runbook: Bring Up the Service Locally
 
 Step-by-step instructions for someone with no prior context. Copy and paste each block in order.
 
@@ -21,7 +21,7 @@ A HTTP API on port **3000** with these endpoints:
 
 Install **one** of the following run methods:
 
-### Option A — Bun (recommended for development)
+### Option A: Bun (recommended for development)
 
 - [Bun](https://bun.sh/) **1.3 or newer**
 
@@ -31,7 +31,7 @@ Check:
 bun --version
 ```
 
-### Option B — Docker (recommended for production-like runs)
+### Option B: Docker (recommended for production-like runs)
 
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) (includes `docker compose`)
 
@@ -45,11 +45,11 @@ docker compose version
 ### Optional (only if LLM refinement is enabled)
 
 - An [OpenAI API key](https://platform.openai.com/api-keys)
-- Set `USE_LLM=false` in `.env` if you do not have a key — the API still works using keyword fallback
+- Set `USE_LLM=false` in `.env` if you do not have a key, the API still works using keyword fallback
 
 ---
 
-## Step 1 — Get the code
+## Step 1: Get the code
 
 ```sh
 git clone https://github.com/Say-M/sust-preli
@@ -64,7 +64,7 @@ cd sust-2026-preli
 
 ---
 
-## Step 2 — Create environment file
+## Step 2: Create environment file
 
 **macOS / Linux / Git Bash:**
 
@@ -90,17 +90,17 @@ SERVER_URL=http://localhost:3000
 
 Notes:
 
-- `USE_LLM=false` — no OpenAI key required; rules-only mode
-- `USE_LLM=true` — `OPENAI_API_KEY` must be set
+- `USE_LLM=false`: no OpenAI key required; rules-only mode
+- `USE_LLM=true`: `OPENAI_API_KEY` must be set
 - Do **not** commit `.env` (it is gitignored)
 
 ---
 
-## Step 3 — Start the service
+## Step 3: Start the service
 
 Pick **one** path below.
 
-### Path A — Local development (hot reload)
+### Path A: Local development (hot reload)
 
 ```sh
 bun install
@@ -109,14 +109,14 @@ bun run dev
 
 Leave this terminal open. The server reloads when you edit source files.
 
-### Path B — Local production mode (no hot reload)
+### Path B: Local production mode (no hot reload)
 
 ```sh
 bun install
 bun run start
 ```
 
-### Path C — Docker
+### Path C: Docker
 
 ```sh
 docker compose up --build
@@ -136,7 +136,7 @@ bun run docker:prod:up
 
 ---
 
-## Step 4 — Verify it is running
+## Step 4: Verify it is running
 
 ### 4a. Health check
 
@@ -197,7 +197,7 @@ Expected: HTTP **200** with JSON containing at least:
 
 ---
 
-## Step 5 — Stop the service
+## Step 5: Stop the service
 
 ### Bun (dev or start)
 
