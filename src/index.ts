@@ -20,7 +20,6 @@ app.onError((error, c) => {
   let status: ContentfulStatusCode = 500;
   let message = "Internal server error";
   const timestamp = new Date().toISOString();
-  console.log({ error });
 
   if (error instanceof HTTPException) {
     status = error.status;
