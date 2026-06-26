@@ -1,7 +1,8 @@
 {
   "name": "sust-2026-preli",
   "scripts": {
-    "dev": "bun run --hot src/index.ts"
+    "dev": "bun run --hot src/index.ts",
+    "start": "bun run src/index.ts"
   },
   "dependencies": {
     "@hono/standard-validator": "^0.2.2",
