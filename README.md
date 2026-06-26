@@ -99,7 +99,7 @@ flowchart TD
     %% Output Safety Rails
     J --> K{Rule: applyOutputRails\nScan generated text for forbidden patterns}
     
-    K -->|Trips Guardrails\n(e.g., PIN request, Refund promise)| L[Replace text with safe\nstatic fallback templates]
+    K -->|"Trips Guardrails\n(e.g., PIN request, Refund promise)"| L[Replace text with safe\nstatic fallback templates]
     K -->|Safe| M[Keep LLM generated text]
     
     %% Final Output
