@@ -85,16 +85,16 @@ This service follows a **deterministic-first** design. Rules decide the outcome;
 
 ```mermaid
 flowchart TD
-    A([Receive Request at /analyze-ticket]) --> B{"Moderation API (OpenAI)"}
+    A([Receive Request at /analyze-ticket]) --> B{"Moderation Guardrail\n(OpenAI API)"}
     
     %% Moderation Flow
     B -->|Flagged as Toxic/Abusive| C[Return Instant Rejection\nDepartment: fraud_risk\nVerdict: insufficient_data]
-    B -->|Safe| D[Rule: detectInjection\nRule: detectLanguage]
+    B -->|Safe| D[Injection Guardrail\nRule: detectInjection\nRule: detectLanguage]
     
     %% Main LLM Generation
     D --> E[Main LLM: gpt-4o-mini\nPrompt: SYSTEM_PROMPT]
     E -->|Generates| F{Parse LLM Output}
-    F -->|Success| G[Extract:\n- case_type\n- agent_summary\n- customer_reply\n- recommended_next_action]
+    F -->|Success| G[Topical Guardrail & Extract:\n- Detect off_topic flag\n- case_type\n- agent_summary\n- customer_reply\n- recommended_next_action]
     F -->|Failure / Timeout| H[Rule: keywordClassify\nFallback to static templates]
     
     %% Deterministic Business Logic
@@ -103,7 +103,7 @@ flowchart TD
     I[Rule: matchTransaction\nComputes verdict & relevantTxnId] --> J[Rule: routing\nComputes Department, Severity,\nhuman_review_required]
     
     %% Output Safety Rails
-    J --> K{Rule: applyOutputRails\nScan generated text for forbidden patterns}
+    J --> K{Output Guardrail\nRule: applyOutputRails\nScan generated text for forbidden patterns}
     
     K -->|"Trips Guardrails\n(e.g., PIN request, Refund promise)"| L[Replace text with safe\nstatic fallback templates]
     K -->|Safe| M[Keep LLM generated text]
