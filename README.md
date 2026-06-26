@@ -77,6 +77,12 @@ docker compose up --build
 
 This service follows a **deterministic-first** design. Rules decide the outcome; the LLM only refines what rules cannot infer reliably from text alone.
 
+**Guardrails Used:**
+1. **Topical Guardrail:** Uses LLM to detect spam or off-topic queries and automatically closes them to protect human agents.
+2. **Moderation Guardrail:** Uses OpenAI Moderation API to instantly reject toxic or abusive queries.
+3. **Injection Guardrail:** Deterministically neutralizes prompt injection attempts.
+4. **Output Guardrail:** Scans output for forbidden actions (credential requests, unauthorized promises, secret leaks).
+
 ```mermaid
 flowchart TD
     A([Receive Request at /analyze-ticket]) --> B{"Moderation API (OpenAI)"}
@@ -169,7 +175,7 @@ Safety is enforced at both input and output stages. If any output rail trips, th
 
 ### Input rails
 1. **Injection neutralization:** Complaint text is untrusted data. It is passed as fenced user content, not in the system prompt. Markers like `ignore previous`, `system:`, `you are now`, and `reply with` are detected and flagged as `possible_injection` in `reason_codes`. Classification still runs normally.
-2. **Topical rail:** Off-topic or nonsense complaints are routed to `case_type: other`, `evidence_verdict: insufficient_data`, and `department: customer_support`. The service always returns the full schema.
+2. **Topical rail:** Off-topic or nonsense complaints are flagged by the LLM. The system intercepts these to automatically close the ticket with a safe reply, explicitly dropping it from the human review queue (`human_review_required: false`), while keeping the schema fully valid.
 
 ### Output rails (applied before every response)
 
