@@ -75,4 +75,9 @@ app.get("/docs", Scalar({ url: "/openapi", theme: "purple" }));
 app.route("", healthRoute);
 app.route("", analyzeTicketRoute);
 
-export default app;
+const port = process.env.PORT || 3000;
+
+export default {
+  port,
+  fetch: app.fetch,
+};
