@@ -8,9 +8,9 @@ import {
   type AnalyzeTicketInput,
   type AnalyzeTicketOutput,
 } from "../modules/analyze-ticket/analyze-ticket.schema";
-import { keywordClassify } from "../utils/classifier.util";
-import { applyOutputRails } from "../utils/rails.util";
-import { buildNextAction, buildReply, needsHumanReview, route } from "../utils/routing.util";
+import { keywordClassify } from "./classifier";
+import { applyOutputRails } from "./rails";
+import { buildNextAction, buildReply, needsHumanReview, route } from "./routing";
 import { detectInjection, detectLanguage } from "../utils/text.util";
 import { matchTransaction } from "../utils/transaction.util";
 
@@ -20,9 +20,6 @@ import { matchTransaction } from "../utils/transaction.util";
 
 /** Tunable threshold — amounts >= this trigger human_review_required. GUESS. */
 export const HIGH_VALUE_BDT = 10_000;
-
-/** Whether to attempt the LLM call. Default true; set "false" to disable. */
-const USE_LLM = process.env.USE_LLM !== "false";
 
 /** Model name for the OpenAI structured-output call. */
 const MODEL_NAME = process.env.OPENAI_MODEL || "gpt-4o-mini";
@@ -51,8 +48,6 @@ interface LLMResult {
 export async function classify(
   input: AnalyzeTicketInput,
 ): Promise<LLMResult | null> {
-  if (!USE_LLM) return null;
-
   try {
     const client = new OpenAI();
 

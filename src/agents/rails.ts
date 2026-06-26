@@ -3,7 +3,7 @@ import {
   Language,
   analyzeTicketOutputSchema,
 } from "../modules/analyze-ticket/analyze-ticket.schema";
-import { buildNextAction, buildReply } from "./routing.util";
+import { buildNextAction, buildReply } from "./routing";
 
 /** Patterns that REQUEST credentials (not warnings about them). */
 const CREDENTIAL_REQUEST_PATTERNS = [
