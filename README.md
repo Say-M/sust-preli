@@ -70,6 +70,65 @@ docker compose up --build
 | `GET` | `/health` | Health check, returns `{"status":"ok"}` |
 | `GET` | `/docs` | Interactive API docs (Scalar UI) |
 | `GET` | `/openapi` | Raw OpenAPI spec (JSON) |
+| `GET` | `/metrics` | Prometheus metrics |
+
+---
+
+## Load / Stress Testing (k6)
+
+[k6](https://k6.io/) scripts live in [`k6/`](k6/). Run them against a **running** API with **`USE_LLM=false`** so tests hit the rule-only path (no OpenAI cost or rate limits).
+
+### Install k6
+
+```sh
+# Windows
+winget install k6
+
+# Verify
+k6 version
+```
+
+Alternatively, run k6 via Docker (mount the repo root so sample payloads resolve):
+
+```sh
+docker run --rm -i \
+  --network sust-preli_app-network \
+  -v "$(pwd):/workspace" \
+  -w /workspace \
+  -e BASE_URL=http://api:3000 \
+  grafana/k6 run k6/stress-analyze-ticket.js
+```
+
+### Run tests
+
+Start the server first:
+
+```sh
+USE_LLM=false bun run start
+```
+
+Then, in another terminal:
+
+```sh
+bun run test:smoke    # GET /health — quick sanity (1 VU, 30s)
+bun run test:load     # POST /analyze-ticket — sustained load (up to 25 VUs)
+bun run test:stress   # POST /analyze-ticket — ramp to find breaking point
+```
+
+Override the target host with `BASE_URL` (default `http://localhost:3000`):
+
+```sh
+BASE_URL=http://localhost:3000 bun run test:stress
+```
+
+### Reading k6 output
+
+- **Thresholds** — pass/fail at the bottom (`http_req_failed`, `http_req_duration` p95).
+- **http_req_duration** — latency percentiles; compare load vs stress runs.
+- **http_reqs** — total requests and implied RPS.
+- **checks** — assertion pass rate (status 200, response shape).
+
+While tests run, scrape [`GET /metrics`](src/modules/health/health.route.ts) in a second terminal to correlate latency with CPU and heap.
 
 ---
 
