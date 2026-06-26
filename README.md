@@ -1,150 +1,260 @@
 # Support Ticket Analysis API
 
-A deterministic-first support ticket triage API for digital-finance platforms (bKash-like). **Rules decide; the LLM only refines `case_type` and drafts `agent_summary`.** No §8-scored field is LLM-generated. The service returns a valid 200 even with the LLM disabled or failing.
+A backend API that triages digital-finance support tickets, built for platforms like bKash. The core idea is simple: deterministic rules handle everything that can be decided mechanically, and the LLM is only brought in for two things: classifying the case type and drafting the agent summary. Every other field in the response is rule-computed. Even if the LLM is turned off or fails, the service returns a valid 200.
+
+---
 
 ## Tech Stack
 
-| Layer | Technology |
+| Layer | Choice |
 |---|---|
 | Runtime | [Bun](https://bun.sh/) 1.3+ |
 | Framework | [Hono](https://hono.dev/) 4.x |
 | Language | TypeScript (strict mode) |
-| Validation | [Zod](https://zod.dev/) 4.x (v4-only syntax: `z.enum(NativeEnum)`, `z.iso.datetime()`) |
-| LLM | [OpenAI SDK](https://github.com/openai/openai-node) 6.x — single structured-output call |
-| Containerization | Docker + docker-compose |
+| Validation | [Zod](https://zod.dev/) 4.x |
+| LLM | [OpenAI SDK](https://github.com/openai/openai-node) 6.x, one structured-output call |
+| Container | Docker + docker-compose |
+| Docs | Scalar (`/docs`) + OpenAPI JSON (`/openapi`) |
 
-## Setup & Run
+---
+
+## Setup Instructions
 
 ### Prerequisites
 - [Bun](https://bun.sh/) ≥ 1.3
-- An OpenAI API key (only needed if `USE_LLM=true`)
+- OpenAI API key (only needed if `USE_LLM=true`)
 
 ### Install dependencies
+
 ```sh
 bun install
 ```
 
 ### Configure environment
+
 ```sh
 cp .env.example .env
-# Edit .env with your OpenAI API key
+# Fill in your OPENAI_API_KEY
 ```
 
 ### Environment Variables
 
 | Variable | Default | Description |
 |---|---|---|
-| `OPENAI_API_KEY` | — | OpenAI API key (required if `USE_LLM=true`) |
+| `OPENAI_API_KEY` | N/A | Required when `USE_LLM=true` |
 | `OPENAI_MODEL` | `gpt-4o-mini` | Model for the classification call |
-| `USE_LLM` | `true` | Set `false` to disable LLM and use keyword fallback only |
+| `USE_LLM` | `true` | Set `false` to run keyword-only mode |
 | `PORT` | `3000` | Server port |
-| `SERVER_URL` | `http://localhost:3000` | Base URL for OpenAPI docs |
+| `SERVER_URL` | `http://localhost:3000` | Base URL shown in OpenAPI docs |
 
-### Run (development)
+---
+
+## Run Commands
+
 ```sh
+# Development (hot reload)
 bun run dev
-```
 
-### Run (production)
-```sh
+# Production
 bun run start
-```
 
-### Run (Docker)
-```sh
+# Docker
 docker compose up --build
 ```
 
-### Endpoints
-- `POST /analyze-ticket` — Analyze a support ticket
-- `GET /health` — Health check → `{"status":"ok"}`
-- `GET /docs` — Interactive API documentation (Scalar)
-- `GET /openapi` — OpenAPI spec (JSON)
+### API Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/analyze-ticket` | Analyze and triage a support ticket |
+| `GET` | `/health` | Health check, returns `{"status":"ok"}` |
+| `GET` | `/docs` | Interactive API docs (Scalar UI) |
+| `GET` | `/openapi` | Raw OpenAPI spec (JSON) |
 
 ---
 
-## Architecture: Rules Decide
+## AI Approach
 
+This service follows a **deterministic-first** design. Rules decide the outcome; the LLM only refines what rules cannot infer reliably from text alone.
+
+```mermaid
+flowchart TD
+    A([POST /analyze-ticket]) --> B[Zod Input Validation]
+    B --> C{LLM enabled?}
+    C -- Yes --> D[OpenAI gpt-4o-mini\nStructured Output]
+    D -- Success --> E[case_type + agent_summary from LLM]
+    D -- Timeout / Error --> F[Keyword Classifier Fallback]
+    C -- No --> F
+    E --> G[Transaction Matching\nDeterministic]
+    F --> G
+    G --> H[Routing Table Lookup\nseverity + department]
+    H --> I[Build customer_reply\nfrom template]
+    I --> J[Output Rails Check\n6 guardrail scans]
+    J --> K([Return AnalyzeTicketOutput])
 ```
-analyze-ticket.route.ts  →  analyze-ticket.service.ts  →  agents/investigator.ts
-       (validation)              (thin seam)                  (THE agent)
-```
 
-### What the rules engine determines (deterministic, no LLM):
-- `relevant_transaction_id` — matched from complaint text + transaction history
-- `evidence_verdict` — `consistent` / `inconsistent` / `insufficient_data`
-- `severity` — from routing table lookup
-- `department` — from routing table lookup
-- `human_review_required` — escalate flag OR inconsistent OR high-value
-- `customer_reply` — **templated** per case_type + language
-- `recommended_next_action` — **templated** per case_type
+### What the rules engine decides (no LLM)
+- `relevant_transaction_id`: matched from complaint text against transaction history
+- `evidence_verdict`: `consistent` / `inconsistent` / `insufficient_data`
+- `severity` and `department`: routing table lookup by case type
+- `human_review_required`: triggered by escalation flags, inconsistent evidence, or high-value transactions
+- `customer_reply`: templated per case type and language (English + Bangla)
+- `recommended_next_action`: templated per case type
 
-### What the LLM provides (optional, one call, structured output):
-- `case_type` — enum-locked via JSON schema `strict: true` (invalid enum impossible)
-- `agent_summary` — 1-2 factual sentences for the support agent
+### What the LLM provides (one structured call)
+- `case_type`: locked to 8 allowed values via JSON schema `strict: true`
+- `agent_summary`: one or two factual sentences for the support agent
 
-### LLM Fallback
-On ANY LLM error, timeout (10s hard ceiling), or when `USE_LLM=false`:
+The complaint is always passed as fenced user content, never in the system prompt. The LLM call has a 10s hard timeout.
+
+### LLM fallback
+
+On any error, timeout, or when `USE_LLM=false`:
 - `case_type` → keyword-based classifier
 - `agent_summary` → generic safe template
-- **The service never crashes or hangs.**
+
+The service never crashes or hangs because of the LLM layer. It always returns a valid 200 response.
+
+### Supported case types
+
+| Case Type | Routed To |
+|---|---|
+| `wrong_transfer` | Dispute Resolution |
+| `payment_failed` | Payments Ops |
+| `duplicate_payment` | Payments Ops |
+| `refund_request` | Customer Support |
+| `merchant_settlement_delay` | Merchant Operations |
+| `agent_cash_in_issue` | Agent Operations |
+| `phishing_or_social_engineering` | Fraud & Risk |
+| `other` | Customer Support |
+
+### Transaction matching (deterministic)
+
+```mermaid
+flowchart TD
+    A[Complaint text] --> B[Extract amounts ≥ 10 BDT]
+    A --> C[Extract BD phone numbers\n01X-XXXXXXXX]
+    B --> D{Any candidates\nin history?}
+    D -- No --> E[insufficient_data]
+    D -- Yes, 1 match --> F{wrong_transfer +\nsame recipient ≥ 3 times?}
+    F -- Yes --> G[inconsistent]
+    F -- No --> H[consistent]
+    D -- Multiple matches --> I{Phone number\nnarrows it down?}
+    I -- Yes, 1 remains --> F
+    I -- No --> E
+    D -- Duplicate check\n≥2 payments, same amount+counterparty,\nwithin 5 minutes --> J[case_type override:\nduplicate_payment + consistent]
+```
 
 ---
 
-## Guardrail Taxonomy
+## Safety Logic
 
-### Input Rails
-1. **Injection neutralization**: Complaint is UNTRUSTED DATA. Passed as fenced user content (never in system prompt). Markers detected: "ignore previous", "system:", "you are now", "reply with", etc. Adds `reason_code: "possible_injection"` — behavior never changes.
-2. **Topical rail**: Off-topic / nonsense → `case_type: other`, `evidence_verdict: insufficient_data`, `department: customer_support`. No "I can't help" path — always returns the schema.
+Safety is enforced at both input and output stages. If any output rail trips, the affected field is replaced with a safe deterministic template. The API never returns 5xx because of a guardrail.
 
-### Output Rails (applied before every response)
-1. **Credential-request scan**: Blocks requests to share/send/provide/enter PIN|OTP|password|card. _Warnings_ like "do not share your OTP" are allowed.
-2. **Unauthorized-action scan**: Blocks promises like "we will refund/reverse/unblock".
-3. **Third-party redirection scan**: Only official channels allowed.
-4. **Secret/stack-trace/token leak scan**: Blocks `sk-` tokens, stack traces, file paths.
-5. **Injection-echo scan**: Prevents complaint instruction text from appearing in output.
-6. **Schema re-validation**: Full Zod re-validation with safe defaults on failure.
+### Input rails
+1. **Injection neutralization:** Complaint text is untrusted data. It is passed as fenced user content, not in the system prompt. Markers like `ignore previous`, `system:`, `you are now`, and `reply with` are detected and flagged as `possible_injection` in `reason_codes`. Classification still runs normally.
+2. **Topical rail:** Off-topic or nonsense complaints are routed to `case_type: other`, `evidence_verdict: insufficient_data`, and `department: customer_support`. The service always returns the full schema.
 
-If any scan trips → the field is replaced with its deterministic safe template. **Never blocks, never 5xx from a guardrail.**
+### Output rails (applied before every response)
 
-### Why No OpenAI Moderation API Call
-- Customer replies are **templated** (safe by construction), not LLM-generated
-- A synchronous moderation call would add latency (~200-500ms) and a new failure mode
-- No scored benefit since the templated replies are pre-vetted
-- If needed in the future, a **local zero-network word-list pass** that only sets a `reason_code` is the recommended approach (no latency cost, no external dependency)
+| Rail | What It Catches |
+|---|---|
+| Credential-request scan | Responses asking to share PIN / OTP / password / card |
+| Unauthorized-action scan | Promises like "we will refund" or "we will reverse" |
+| Third-party redirection | Any reference to unofficial channels |
+| Secret/token leak | `sk-` prefixes, stack traces, file paths |
+| Injection-echo | Complaint instruction text appearing verbatim in output |
+| Schema re-validation | Full Zod check on the final response before sending |
+
+### Why no OpenAI Moderation API call
+- Customer replies are templated (safe by construction), not freely LLM-generated
+- A synchronous moderation call would add latency and a new failure mode
+- If needed later, a local zero-network word-list pass that only sets a `reason_code` is the recommended approach
 
 ---
 
-## Model Choice & Cost Reasoning
+## Model and Cost Reasoning
 
-**Model**: `gpt-4o-mini` (configurable via `OPENAI_MODEL`)
+**Model:** `gpt-4o-mini` (configurable via `OPENAI_MODEL`)
 
-- **Task**: Enum classification (1 of 8 values) + 1-2 sentence summary
-- **Why mini**: This is a simple classification task — a small/fast model is sufficient and far cheaper
-- **Structured outputs**: `strict: true` JSON schema makes invalid enum values impossible at the API level
-- **Cost**: ~$0.15 per 1M input tokens / ~$0.60 per 1M output tokens — negligible per request
-- **Latency**: p50 < 1s, well within the 5s p95 target
+| Factor | Reasoning |
+|---|---|
+| Task type | Enum classification (1 of 8 values) plus a 1-2 sentence summary |
+| Why mini | Simple classification task; a small fast model is enough and much cheaper |
+| Structured output | `strict: true` JSON schema makes invalid enum values impossible at the API level |
+| Cost | ~$0.15 per 1M input tokens / ~$0.60 per 1M output tokens, negligible per request |
+| Latency | p50 under 1s, within the 5s p95 target |
+| Reliability | 10s hard timeout with keyword fallback if the call fails |
 
 ---
 
 ## Assumptions
 
-| Assumption | Value | Notes |
+| Assumption | Value | Note |
 |---|---|---|
-| `HIGH_VALUE_BDT` | 10,000 BDT | Tunable threshold for human review escalation. **This is a GUESS** based on typical digital wallet transaction ranges. |
-| Duplicate window | 5 minutes | Two transactions with same amount + counterparty within this window → `duplicate_payment` |
-| Amount extraction | ≥ 10 BDT | Amounts below 10 are filtered as noise |
-| Phone number format | `01X-XXXXXXXX` | 11-digit BD mobile numbers starting with 01 |
+| High-value threshold | 10,000 BDT | Tunable. Triggers `human_review_required`. Based on typical digital wallet ranges and needs real-world calibration. |
+| Duplicate detection window | 5 minutes | Two payments with the same amount and counterparty within this window → `duplicate_payment` |
+| Minimum amount for matching | 10 BDT | Amounts below this are treated as noise |
+| Phone number format | `01X-XXXXXXXX` | 11-digit Bangladeshi mobile numbers starting with `01` |
 
 ---
 
 ## Known Limitations
 
-1. **Bangla template coverage**: Only 1 of 8 Bangla `customer_reply` templates (`wrong_transfer`) is publicly verified. The other 7 are best-effort translations marked `[HUMAN_REVIEW_REQUIRED]` in the source. **A human Bangla speaker must review these before production use.**
-2. **Keyword classifier**: The fallback keyword classifier is intentionally simple. It may mis-classify edge cases that the LLM handles well (e.g., Bangla-only complaints with no obvious keywords).
-3. **Transaction matching**: Amount-based matching may miss transactions if the customer uses approximate amounts ("around 5000") or non-standard formatting.
-4. **Duplicate detection**: Only considers same amount + same counterparty + close timestamps. Does not detect semantic duplicates (e.g., "I paid twice" without matching transaction metadata).
-5. **No persistent state**: Each request is independent — no cross-request correlation or ticket history.
+1. **Bangla templates:** Only the `wrong_transfer` Bangla reply is verified. The other seven are best-effort translations and are marked `[HUMAN_REVIEW_REQUIRED]` in the source. A native Bangla speaker must review these before production.
+
+2. **Keyword classifier:** The fallback is intentionally simple. It can mis-classify edge cases that the LLM handles well, particularly Bangla-only complaints with no obvious keywords.
+
+3. **Approximate amounts:** Transaction matching uses exact amounts. Complaints like "around 5000" or "roughly 2k" may not match correctly.
+
+4. **Semantic duplicates:** Duplicate detection only works on same amount + same counterparty + close timestamps. It does not catch cases like "I paid twice" when the transaction metadata does not match this pattern.
+
+5. **No persistent state:** Each request is fully independent. No cross-request correlation, no ticket history.
+
+---
+
+## Sample Request and Response
+
+### Request
+
+```json
+{
+  "ticket_id": "TKT-001",
+  "complaint": "I sent 5000 taka to the wrong number by mistake.",
+  "language": "en",
+  "channel": "in_app_chat",
+  "user_type": "customer",
+  "transaction_history": [
+    {
+      "transaction_id": "TXN-9821",
+      "timestamp": "2024-06-01T10:00:00.000Z",
+      "type": "transfer",
+      "amount": 5000,
+      "counterparty": "01712345678",
+      "status": "completed"
+    }
+  ]
+}
+```
+
+### Response
+
+```json
+{
+  "ticket_id": "TKT-001",
+  "relevant_transaction_id": "TXN-9821",
+  "evidence_verdict": "consistent",
+  "case_type": "wrong_transfer",
+  "severity": "high",
+  "department": "dispute_resolution",
+  "agent_summary": "Customer claims a 5000 BDT transfer was sent to the wrong number. Transaction TXN-9821 matches the reported amount.",
+  "recommended_next_action": "Verify ledger status for TXN-9821 and initiate dispute resolution process.",
+  "customer_reply": "We have noted your concern regarding the transfer of 5000 BDT (Ref: TXN-9821). Our dispute resolution team will review the case and update you through official channels. Please do not share your PIN or OTP with anyone.",
+  "human_review_required": true,
+  "confidence": 0.9,
+  "reason_codes": ["wrong_transfer", "evidence_consistent", "transaction_match", "completed"]
+}
+```
 
 ---
 
@@ -152,17 +262,24 @@ If any scan trips → the field is replaced with its deterministic safe template
 
 ```
 src/
-  common/schema.ts                         # errorResponseSchema only
-  modules/
-    analyze-ticket/
-      analyze-ticket.schema.ts             # SINGLE source of truth: all enums + Zod schemas + types
-      analyze-ticket.route.ts              # Hono POST handler: JSON parse, validate, call service, error mapping
-      analyze-ticket.service.ts            # THIN seam: returns investigator.analyzeTicket(validatedInput)
-    health/
-      health.route.ts                      # GET /health → {"status":"ok"}
-      health.schema.ts
-      health.service.ts
-  agents/
-    investigator.ts                        # THE agent. Exported analyzeTicket(input). All reasoning + rails.
-  index.ts                                 # Mount routers, bind 0.0.0.0, PORT from env
+├── index.ts                                   # App entry: mount routes, bind port
+├── common/
+│   └── schema.ts                              # Shared error response schema
+├── modules/
+│   ├── analyze-ticket/
+│   │   ├── analyze-ticket.schema.ts           # All enums, Zod schemas, and types
+│   │   ├── analyze-ticket.route.ts            # HTTP handler: validate → service → respond
+│   │   └── analyze-ticket.service.ts          # Thin seam to the investigator agent
+│   └── health/
+│       ├── health.route.ts
+│       ├── health.schema.ts
+│       └── health.service.ts
+├── agents/
+│   ├── investigator.ts                        # Main agent: all reasoning + rail application
+│   ├── classifier.ts                          # Keyword fallback classifier
+│   ├── routing.ts                             # Routing table, reply builder, next action builder
+│   └── rails.ts                               # 6 output guardrail scans
+└── utils/
+    ├── text.util.ts                           # Amount extraction, phone detection, injection detection
+    └── transaction.util.ts                    # Deterministic transaction matching
 ```
