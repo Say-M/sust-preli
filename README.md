@@ -136,18 +136,24 @@ While tests run, scrape [`GET /metrics`](src/modules/health/health.route.ts) in 
 
 This service follows a **deterministic-first** design. Rules decide the outcome; the LLM only refines what rules cannot infer reliably from text alone.
 
+**Guardrails Used:**
+1. **Topical Guardrail:** Uses LLM to detect spam or off-topic queries and automatically closes them to protect human agents.
+2. **Moderation Guardrail:** Uses OpenAI Moderation API to instantly reject toxic or abusive queries.
+3. **Injection Guardrail:** Deterministically neutralizes prompt injection attempts.
+4. **Output Guardrail:** Scans output for forbidden actions (credential requests, unauthorized promises, secret leaks).
+
 ```mermaid
 flowchart TD
-    A([Receive Request at /analyze-ticket]) --> B{"Moderation API (OpenAI)"}
+    A([Receive Request at /analyze-ticket]) --> B{"Moderation Guardrail\n(OpenAI API)"}
     
     %% Moderation Flow
     B -->|Flagged as Toxic/Abusive| C[Return Instant Rejection\nDepartment: fraud_risk\nVerdict: insufficient_data]
-    B -->|Safe| D[Rule: detectInjection\nRule: detectLanguage]
+    B -->|Safe| D[Injection Guardrail\nRule: detectInjection\nRule: detectLanguage]
     
     %% Main LLM Generation
     D --> E[Main LLM: gpt-4o-mini\nPrompt: SYSTEM_PROMPT]
     E -->|Generates| F{Parse LLM Output}
-    F -->|Success| G[Extract:\n- case_type\n- agent_summary\n- customer_reply\n- recommended_next_action]
+    F -->|Success| G[Topical Guardrail & Extract:\n- Detect off_topic flag\n- case_type\n- agent_summary\n- customer_reply\n- recommended_next_action]
     F -->|Failure / Timeout| H[Rule: keywordClassify\nFallback to static templates]
     
     %% Deterministic Business Logic
@@ -156,7 +162,7 @@ flowchart TD
     I[Rule: matchTransaction\nComputes verdict & relevantTxnId] --> J[Rule: routing\nComputes Department, Severity,\nhuman_review_required]
     
     %% Output Safety Rails
-    J --> K{Rule: applyOutputRails\nScan generated text for forbidden patterns}
+    J --> K{Output Guardrail\nRule: applyOutputRails\nScan generated text for forbidden patterns}
     
     K -->|"Trips Guardrails\n(e.g., PIN request, Refund promise)"| L[Replace text with safe\nstatic fallback templates]
     K -->|Safe| M[Keep LLM generated text]
@@ -228,7 +234,7 @@ Safety is enforced at both input and output stages. If any output rail trips, th
 
 ### Input rails
 1. **Injection neutralization:** Complaint text is untrusted data. It is passed as fenced user content, not in the system prompt. Markers like `ignore previous`, `system:`, `you are now`, and `reply with` are detected and flagged as `possible_injection` in `reason_codes`. Classification still runs normally.
-2. **Topical rail:** Off-topic or nonsense complaints are routed to `case_type: other`, `evidence_verdict: insufficient_data`, and `department: customer_support`. The service always returns the full schema.
+2. **Topical rail:** Off-topic or nonsense complaints are flagged by the LLM. The system intercepts these to automatically close the ticket with a safe reply, explicitly dropping it from the human review queue (`human_review_required: false`), while keeping the schema fully valid.
 
 ### Output rails (applied before every response)
 
@@ -267,24 +273,8 @@ Safety is enforced at both input and output stages. If any output rail trips, th
 
 | Assumption | Value | Note |
 |---|---|---|
-| High-value threshold | 10,000 BDT | Tunable. Triggers `human_review_required`. Based on typical digital wallet ranges and needs real-world calibration. |
 | Duplicate detection window | 5 minutes | Two payments with the same amount and counterparty within this window → `duplicate_payment` |
 | Minimum amount for matching | 10 BDT | Amounts below this are treated as noise |
-| Phone number format | `01X-XXXXXXXX` | 11-digit Bangladeshi mobile numbers starting with `01` |
-
----
-
-## Known Limitations
-
-1. **Bangla templates:** Only the `wrong_transfer` Bangla reply is verified. The other seven are best-effort translations and are marked `[HUMAN_REVIEW_REQUIRED]` in the source. A native Bangla speaker must review these before production.
-
-2. **Keyword classifier:** The fallback is intentionally simple. It can mis-classify edge cases that the LLM handles well, particularly Bangla-only complaints with no obvious keywords.
-
-3. **Approximate amounts:** Transaction matching uses exact amounts. Complaints like "around 5000" or "roughly 2k" may not match correctly.
-
-4. **Semantic duplicates:** Duplicate detection only works on same amount + same counterparty + close timestamps. It does not catch cases like "I paid twice" when the transaction metadata does not match this pattern.
-
-5. **No persistent state:** Each request is fully independent. No cross-request correlation, no ticket history.
 
 ---
 
