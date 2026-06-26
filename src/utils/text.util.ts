@@ -89,7 +89,6 @@ export function extractAmounts(text: string): number[] {
             (match.index ?? 0) + match[0].length + 5,
           );
           if (/^\s*(pm|am|:|o'clock)/i.test(afterMatch)) continue;
-          if (num >= 1900 && num <= 2100) continue; // Year-like
 
           seen.add(num);
           amounts.push(num);
