@@ -2,7 +2,8 @@ import { Hono } from "hono";
 import { describeRoute, resolver } from "hono-openapi";
 import { healthResponseSchema } from "./health.schema";
 import { errorResponseSchema } from "../../common/schema";
-import { checkHealth } from "./health.service";
+import { register } from "./health.metrics";
+import { checkHealth, refreshHealthMetric } from "./health.service";
 
 const app = new Hono();
 
@@ -41,5 +42,13 @@ app.get(
     return c.json(health);
   },
 );
+
+app.get("/metrics", async (c) => {
+  refreshHealthMetric();
+  const metrics = await register.metrics();
+  return c.body(metrics, 200, {
+    "Content-Type": register.contentType,
+  });
+});
 
 export default app;
