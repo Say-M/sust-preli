@@ -1,0 +1,1 @@
+import { z } from "zod"; import { zodResponseFormat } from "openai/helpers/zod"; enum CaseType { other="other", irrelevant="irrelevant" }; const schema = z.object({ case_type: z.enum(CaseType as any) }); console.log(JSON.stringify(zodResponseFormat(schema, "test"), null, 2));
